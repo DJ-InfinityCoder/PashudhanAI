@@ -18,6 +18,18 @@ import tensorflow as tf
 from dotenv import load_dotenv
 load_dotenv()     # IMPORTANT: loads GEMINI_API_KEY + OPENAI_API_KEY from .env
 
+# Force Legacy Keras (Fix for 'batch_shape' error if TF 2.16+ is installed)
+os.environ["TF_USE_LEGACY_KERAS"] = "1"
+
+# Debug Versions
+import tensorflow as tf
+try:
+    import keras
+    print(f"TensorFlow Version: {tf.__version__}")
+    print(f"Keras Version: {keras.__version__}")
+except:
+    pass
+
 # Gemini (required)
 try:
     import google.generativeai as genai
