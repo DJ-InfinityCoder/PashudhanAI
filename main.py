@@ -224,7 +224,7 @@ st.title(S["title"])
 # ---------------- SIDEBAR NAVIGATION & TOGGLES ----------------
 st.sidebar.markdown("---")
 st.sidebar.header(S.get("nav_title", "Navigation"))
-nav_choice = st.sidebar.radio("", [S["tab_predict"], S["tab_ask"]])
+nav_choice = st.sidebar.radio("Navigation", [S["tab_predict"], S["tab_ask"]], label_visibility="collapsed")
 
 st.sidebar.markdown("---")
 enable_tts = st.sidebar.checkbox(S["enable_audio"], True)
