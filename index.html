@@ -1,32 +1,73 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PashudhanAI</title>
+    <meta charset="UTF-8">
+    <title>PashudhanAI </title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Auto Redirect -->
+    <meta http-equiv="refresh" content="2; url=https://pashudhanai-dj.streamlit.app/" />
 
     <style>
-        html,
-        body {
+        * {
             margin: 0;
             padding: 0;
-            height: 100%;
-            overflow: hidden;
+            box-sizing: border-box;
+            font-family: "Segoe UI", Tahoma, sans-serif;
         }
 
-        iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
-            margin: 0;
-            padding: 0;
+        body {
+            height: 100vh;
+            background: #f8f9fc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            color: #333;
+        }
+
+        /* Loader */
+        .loader {
+            border: 6px solid #e0e0e0;
+            border-top: 6px solid #4a90e2;
+            border-radius: 50%;
+            width: 65px;
+            height: 65px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .text {
+            font-size: 1.3rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            color: #444;
+            margin-bottom: 5px;
+        }
+
+        .subtext {
+            color: #777;
+            font-size: 0.95rem;
         }
     </style>
+
+    <script>
+        // Javascript backup redirect (in case meta refresh fails)
+        setTimeout(function () {
+            window.location.href = "https://pashudhanai-dj.streamlit.app/";
+        }, 2000);
+    </script>
 </head>
 
 <body>
-    <iframe src="https://pashudhanai-dj.streamlit.app/" title="PashudhanAI App" allowfullscreen>
-</body>
 
+    <div class="loader"></div>
+
+    <div class="text">Loading PashudhanAI...</div>
+
+</body>
 </html>
