@@ -239,7 +239,8 @@ def load_cnn_model():
         return None
     try:
         return tf.keras.models.load_model(MODEL_PATH)
-    except Exception:
+    except Exception as e:
+        st.error(f"Model load error: {e}")
         return None
 
 @st.cache_data
