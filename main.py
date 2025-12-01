@@ -1,6 +1,6 @@
 import os
-# Force Legacy Keras (Must be before import tensorflow)
-os.environ["TF_USE_LEGACY_KERAS"] = "1"
+# Set Keras backend
+os.environ["KERAS_BACKEND"] = "tensorflow"
 
 import io
 import tempfile
