@@ -1,4 +1,7 @@
 import os
+# Force Legacy Keras (Must be before import tensorflow)
+os.environ["TF_USE_LEGACY_KERAS"] = "1"
+
 import io
 import tempfile
 import re
@@ -18,8 +21,9 @@ import tensorflow as tf
 from dotenv import load_dotenv
 load_dotenv()     # IMPORTANT: loads GEMINI_API_KEY + OPENAI_API_KEY from .env
 
-# Force Legacy Keras (Fix for 'batch_shape' error if TF 2.16+ is installed)
-os.environ["TF_USE_LEGACY_KERAS"] = "1"
+# ---------- Load .env ----------
+from dotenv import load_dotenv
+load_dotenv()     # IMPORTANT: loads GEMINI_API_KEY + OPENAI_API_KEY from .env
 
 # Debug Versions
 import tensorflow as tf
