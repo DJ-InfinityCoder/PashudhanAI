@@ -135,7 +135,7 @@ dmypy.json
 cython_debug/
 
 # Model files (optional, depending on size)
-*.h5
+# *.h5
 # *.tflite
 
 # IDE settings
