@@ -230,7 +230,7 @@ if "manual_current_breed" not in st.session_state:
     st.session_state.manual_current_breed = None
 
 # Load model + dataset
-MODEL_PATH = "my_model.h5"
+MODEL_PATH = "pashu_model.h5"
 DATASET_PATH = "dataset.csv"
 
 @st.cache_resource
