@@ -12,3 +12,4 @@ gTTS
 deep-translator
 
 python-dotenv
+streamlit-option-menu

@@ -1,234 +1,146 @@
 import os
-# Set Keras backend
-os.environ["KERAS_BACKEND"] = "tensorflow"
-
 import io
-import tempfile
-import re
-import time
-from typing import Optional
-
 import streamlit as st
-import numpy as np
-import pandas as pd
 from PIL import Image
 import requests
-
-# ML imports
-import tensorflow as tf
-
-# ---------- Load .env ----------
 from dotenv import load_dotenv
-load_dotenv()     # IMPORTANT: loads GEMINI_API_KEY + OPENAI_API_KEY from .env
 
-# ---------- Load .env ----------
-from dotenv import load_dotenv
-load_dotenv()     # IMPORTANT: loads GEMINI_API_KEY + OPENAI_API_KEY from .env
+# Import modular utils
+from utils.ui_constants import UI_STRINGS
+from utils.model_utils import load_cnn_model, get_cached_prediction, preprocess_pil
+from utils.data_utils import load_dataset, get_breed_info, get_breed_context_string
+from utils.gemini_utils import configure_gemini, generate_breed_info, generate_chat_response, generate_manual_chat_response
+from utils.translation_utils import translate_to_english, translate_from_english, translate_text
+from utils.tts_utils import play_tts, generate_audio_bytes
 
-# Debug Versions
-import tensorflow as tf
-try:
-    import keras
-    print(f"TensorFlow Version: {tf.__version__}")
-    print(f"Keras Version: {keras.__version__}")
-except:
-    pass
-
-# Gemini (required)
-try:
-    import google.generativeai as genai
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        try:
-            api_key = st.secrets["GEMINI_API_KEY"]
-        except Exception:
-            pass
-    genai.configure(api_key=api_key)
-except Exception:
-    genai = None
-
-# Optional EfficientNet preprocess
-try:
-    from tensorflow.keras.applications.efficientnet import preprocess_input
-except Exception:
-    def preprocess_input(x):
-        return x.astype("float32") / 255.0
-
-# Optional speech recognition
-try:
-    import speech_recognition as sr
-    HAVE_SR = True
-except Exception:
-    HAVE_SR = False
-
-# Optional TTS
-try:
-    from gtts import gTTS
-    HAVE_GTTS = True
-except Exception:
-    HAVE_GTTS = False
-
-# Optional translator
-try:
-    from deep_translator import GoogleTranslator
-    HAVE_TRANSLATOR = True
-except Exception:
-    HAVE_TRANSLATOR = False
+# Load environment (optional, mostly for other vars if any)
+load_dotenv()
 
 # Streamlit setup
-st.set_page_config(page_title="PashuDhan AI", layout="wide")
+st.set_page_config(page_title="🐄 PashuDhan AI", layout="wide")
 st.markdown("""
 <style>
+/* Global Button Style */
 div.stButton > button:first-child {
-    background-color: #28a745;
+    background-color: #DD5716;
     color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+div.stButton > button:first-child:hover {
+    background-color: #b94510;
+    color: white;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+}
+div.stButton > button:first-child:active {
+    background-color: #96380d;
+    color: white;
+}
+
+/* Chat Input Style */
+.stChatInputContainer {
+    border-color: #DD5716 !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# UI strings (multilingual)
-UI_STRINGS = {
-    "English": {
-        "title": "PashuDhan AI",
-        "nav_title": "Navigation",
-        "tab_predict": "Predict Breed & Chat",
-        "tab_ask": "Ask PashuAI (General)",
-        "enable_audio": "Enable Audio",
-        "enable_translation": "Enable Translation",
-        "upload": "Upload Image",
-        "url": "Image URL",
-        "webcam": "Use Webcam",
-        "generate": "Generate Response",
-        "predicted": "Predicted Breed",
-        "confidence": "Confidence",
-        "no_model": "Model not found. Place pashu_model.h5 in folder.",
-        "no_dataset": "dataset.csv missing.",
-        "ask_question": "Ask a Question about the Cattle",
-        "select_input": "Select input type",
-        "take_photo": "Take photo",
-        "choose_image": "Choose image",
-        "enter_url": "Enter image URL",
-        "response": "Response",
-        "invalid_url": "Invalid URL",
-        "no_dataset_info": "No dataset info found for this breed.",
-        "enter_question": "Enter question.",
-        "breed_information": "Breed Information",
-        "tts_failed": "Audio failed:",
-        "chat_history": "Chat with AI about this Breed",
-        "follow_up_placeholder": "Ask a follow-up question about this animal...",
-        "separate_section": "Independent Query Section",
-        "manual_chat_placeholder": "Ask anything about this breed..."
-    },
-    "Hindi": {
-        "title": "पशुधन AI",
-        "nav_title": "नेविगेशन",
-        "tab_predict": "नस्ल पहचान और चैट",
-        "tab_ask": "पशुधन AI से पूछें (सामान्य)",
-        "enable_audio": "ऑडियो सक्षम करें",
-        "enable_translation": "अनुवाद सक्षम करें",
-        "upload": "छवि अपलोड करें",
-        "url": "छवि URL",
-        "webcam": "वेबकैम का उपयोग करें",
-        "generate": "जवाब प्राप्त करें",
-        "predicted": "अनुमानित नस्ल",
-        "confidence": "विश्वास स्तर",
-        "no_model": "मॉडल नहीं मिला। कृपया pashu_model.h5 फ़ोल्डर में रखें।",
-        "no_dataset": "dataset.csv नहीं मिला।",
-        "ask_question": "पशु के बारे में प्रश्न पूछें",
-        "select_input": "इनपुट प्रकार चुनें",
-        "take_photo": "फोटो लें",
-        "choose_image": "छवि चुनें",
-        "enter_url": "छवि URL दर्ज करें",
-        "response": "जवाब",
-        "invalid_url": "अमान्य URL",
-        "no_dataset_info": "इस नस्ल के लिए dataset जानकारी नहीं मिली।",
-        "enter_question": "कृपया प्रश्न दर्ज करें।",
-        "breed_information": "नस्ल जानकारी",
-        "tts_failed": "ऑडियो त्रुटि:",
-        "chat_history": "इस नस्ल के बारे में AI से चैट करें",
-        "follow_up_placeholder": "इस जानवर के बारे में और सवाल पूछें...",
-        "separate_section": "स्वतंत्र प्रश्न अनुभाग",
-        "manual_chat_placeholder": "इस नस्ल के बारे में कुछ भी पूछें..."
-    },
-    "Marathi": {
-        "title": "पशुधन AI",
-        "nav_title": "नेव्हिगेशन",
-        "tab_predict": "जात ओळख आणि चैट",
-        "tab_ask": "पशुधन AI ला विचारा (सामान्य)",
-        "enable_audio": "ऑडिओ सक्षम करा",
-        "enable_translation": "भाषांतर सक्षम करा",
-        "upload": "प्रतिमा अपलोड करा",
-        "url": "प्रतिमा URL",
-        "webcam": "वेबकॅम वापरा",
-        "generate": "उत्तर तयार करा",
-        "predicted": "भाकीत केलेली जात",
-        "confidence": "विश्वास",
-        "no_model": "मॉडेल सापडले नाही. कृपया pashu_model.h5 ठेवा.",
-        "no_dataset": "dataset.csv सापडला नाही.",
-        "ask_question": "गुरांबद्दल प्रश्न विचारा",
-        "select_input": "इनपुट प्रकार निवडा",
-        "take_photo": "फोटो घ्या",
-        "choose_image": "प्रतिमा निवडा",
-        "enter_url": "प्रतिमा URL भरा",
-        "response": "उत्तर",
-        "invalid_url": "अवैध URL",
-        "no_dataset_info": "या जातीबद्दल dataset माहिती सापडली नाही.",
-        "enter_question": "कृपया प्रश्न भरा.",
-        "breed_information": "जात माहिती",
-        "tts_failed": "ऑडिओ त्रुटी:",
-        "chat_history": "AI सोबत चर्चा करा",
-        "follow_up_placeholder": "पुढील प्रश्न विचारा...",
-        "separate_section": "स्वतंत्र प्रश्न विभाग",
-        "manual_chat_placeholder": "या जातीबद्दल काहीही विचारा..."
-    },
-    "Punjabi": {
-        "title": "ਪਸ਼ੁਧਨ AI",
-        "nav_title": "ਨੇਵੀਗੇਸ਼ਨ",
-        "tab_predict": "ਨਸਲ ਪਹਚਾਣ ਅਤੇ ਚੈਟ",
-        "tab_ask": "ਪਸ਼ੂਧਨ AI ਤੋਂ ਪੁੱਛੋ (ਆਮ)",
-        "enable_audio": "ਆਡੀਓ ਸਮਰੱਥ ਕਰੋ",
-        "enable_translation": "ਅਨੁਵਾਦ ਸਮਰੱਥ ਕਰੋ",
-        "upload": "ਤਸਵੀਰ ਅਪਲੋਡ ਕਰੋ",
-        "url": "ਤਸਵੀਰ URL",
-        "webcam": "ਵੇਬਕੈਮ ਨਾਲ ਤਸਵੀਰ ਲਓ",
-        "generate": "ਜਵਾਬ ਤਿਆਰ ਕਰੋ",
-        "predicted": "ਅਨੁਮਾਨਿਤ ਨਸਲ",
-        "confidence": "ਭਰੋਸਾ",
-        "no_model": "ਮਾਡਲ ਨਹੀਂ ਮਿਲਿਆ। ਕਿਰਪਾ ਕਰਕੇ pashu_model.h5 ਫੋਲਡਰ ਵਿਚ ਰੱਖੋ।",
-        "no_dataset": "dataset.csv ਨਹੀਂ ਮਿਲਿਆ।",
-        "ask_question": "ਪਸ਼ੂ ਬਾਰੇ ਪ੍ਰਸ਼ਨ ਪੁੱਛੋ",
-        "select_input": "ਇਨਪੁਟ ਕਿਸਮ ਚੁਣੋ",
-        "take_photo": "ਫੋਟੋ ਖਿੱਚੋ",
-        "choose_image": "ਤਸਵੀਰ ਚੁਣੋ",
-        "enter_url": "ਤਸਵੀਰ ਦਾ URL ਦਾਖ਼ਲ ਕਰੋ",
-        "response": "ਜਵਾਬ",
-        "invalid_url": "ਅਵੈਧ URL",
-        "no_dataset_info": "ਇਸ ਨਸਲ ਲਈ ਡੇਟਾਸੇਟ ਜਾਣਕਾਰੀ ਨਹੀਂ ਮਿਲੀ।",
-        "enter_question": "ਕਿਰਪਾ ਕਰਕੇ ਪ੍ਰਸ਼ਨ ਦਿਓ।",
-        "breed_information": "ਨਸਲ ਜਾਣਕਾਰੀ",
-        "tts_failed": "ਆਡੀਓ ਤਰੁੱਟੀ:",
-        "chat_history": "AI ਨਾਲ ਗੱਲਬਾਤ ਕਰੋ",
-        "follow_up_placeholder": "ਹੋਰ ਸਵਾਲ ਪੁੱਛੋ...",
-        "separate_section": "ਵੱਖਰਾ ਸਵਾਲ ਸੈਕਸ਼ਨ",
-        "manual_chat_placeholder": "ਇਸ ਨਸਲ ਬਾਰੇ ਕੁਝ ਵੀ ਪੁੱਛੋ..."
-    },
-}
+# Always enable translation if available
+try:
+    from deep_translator import GoogleTranslator
+    HAVE_TRANSLATOR = True
+except ImportError:
+    HAVE_TRANSLATOR = False
+enable_translator = HAVE_TRANSLATOR
 
-# sidebar language selection
+# Check if TTS is available
+try:
+    from gtts import gTTS
+    HAVE_GTTS = True
+except ImportError:
+    HAVE_GTTS = False
+
+# Sidebar Language Selection
+
 lang_choice = st.sidebar.selectbox("Interface Language / भाषा / ਭਾਸ਼ਾ", list(UI_STRINGS.keys()))
 S = UI_STRINGS[lang_choice]
 TARGET_LANG = lang_choice
 
+# API Key Input
+user_api_key = st.sidebar.text_input(translate_text(S.get("api_key_label", "Gemini API Key"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR), type="password", help=translate_text(S.get("api_key_help", "Enter your Google Gemini API key here."), TARGET_LANG, enable_translator, HAVE_TRANSLATOR), key="gemini_api_key")
+if user_api_key:
+    configure_gemini(user_api_key)
+else:
+    st.sidebar.warning(translate_text(S.get("api_key_warning", "⚠️ Please enter your Google Gemini API key to use chat features."), TARGET_LANG, enable_translator, HAVE_TRANSLATOR))
+
+
+# Initialize last_lang if not present
+if "last_lang" not in st.session_state:
+    st.session_state.last_lang = TARGET_LANG
+
+# Handle Language Change
+if st.session_state.last_lang != TARGET_LANG:
+    # Clear all history and cached info on language change
+    st.session_state.chat_history = []
+    st.session_state.manual_chat_history = []
+    st.session_state.current_breed_info = None
+    # Resetting predicted breed will trigger re-generation of info if image persists
+    st.session_state.current_predicted_breed = None 
+    st.session_state.audio_cache = {}
+    
+    # Update last_lang
+    st.session_state.last_lang = TARGET_LANG
+    st.rerun()
+
 st.title(S["title"])
 
 # ---------------- SIDEBAR NAVIGATION & TOGGLES ----------------
-st.sidebar.markdown("---")
-st.sidebar.header(S.get("nav_title", "Navigation"))
-nav_choice = st.sidebar.radio("Navigation", [S["tab_predict"], S["tab_ask"]], label_visibility="collapsed")
+# st.sidebar.markdown("---")
+# st.sidebar.header(S.get("nav_title", "Navigation"))
 
-st.sidebar.markdown("---")
-enable_tts = st.sidebar.checkbox(S["enable_audio"], True)
-enable_translator = st.sidebar.checkbox(S["enable_translation"], HAVE_TRANSLATOR)
+# nav_choice = st.sidebar.radio("Navigation", [S["tab_predict"], S["tab_ask"]], label_visibility="collapsed")
+
+from streamlit_option_menu import option_menu
+
+with st.sidebar:
+    # Initialize active_tab_index if not present
+    if "active_tab_index" not in st.session_state:
+        st.session_state.active_tab_index = 0
+
+    nav_options = [S["tab_predict"], S["tab_ask"]]
+
+    nav_choice = option_menu(
+        menu_title=S.get("nav_title", "Navigation"),
+        options=nav_options,
+        icons=[S.get("icon_predict", "camera-fill"), S.get("icon_ask", "chat-dots-fill")],
+        menu_icon="cast",
+        default_index=st.session_state.active_tab_index,
+        styles={
+            "container": {"padding": "0!important", "background-color": "transparent"},
+            "icon": {"color": "#4A4A4A", "font-size": "20px"},   # Normal icon color
+            "nav-link": {
+                "font-size": "16px",
+                "text-align": "left",
+                "margin": "0px 0px 10px 0px",
+                "--hover-color": "#D1D1D1"
+            },
+            "icon-selected": {
+                "color": "#FFFFFF"
+            },
+            "nav-link-selected": {
+                "background-color": "#DD5716",
+                "color": "#FFFFFF",                 
+            },
+        }
+    )
+
+    # Update active_tab_index based on selection
+    if nav_choice in nav_options:
+        st.session_state.active_tab_index = nav_options.index(nav_choice)
+
+
 
 # ---------------- SESSION STATE INIT ----------------
 # 1. History for Predict Tab
@@ -238,6 +150,10 @@ if "current_predicted_breed" not in st.session_state:
     st.session_state.current_predicted_breed = None
 if "current_breed_context" not in st.session_state:
     st.session_state.current_breed_context = ""
+if "current_breed_info" not in st.session_state:
+    st.session_state.current_breed_info = None
+if "persisted_image" not in st.session_state:
+    st.session_state.persisted_image = None
 
 # 2. History for Ask/Manual Tab
 if "manual_chat_history" not in st.session_state:
@@ -245,41 +161,11 @@ if "manual_chat_history" not in st.session_state:
 if "manual_current_breed" not in st.session_state:
     st.session_state.manual_current_breed = None
 
-# Load model + dataset
-MODEL_PATH = "pashu_model.h5"
-DATASET_PATH = "dataset.csv"
+# 3. Audio Cache
+if "audio_cache" not in st.session_state:
+    st.session_state.audio_cache = {}
 
-@st.cache_resource
-def load_cnn_model():
-    # Decompress if needed
-    if not os.path.exists(MODEL_PATH) and os.path.exists(MODEL_PATH + ".gz"):
-        import gzip
-        import shutil
-        try:
-            with gzip.open(MODEL_PATH + ".gz", 'rb') as f_in:
-                with open(MODEL_PATH, 'wb') as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-        except Exception as e:
-            st.error(f"Error decompressing model: {e}")
-            return None
-
-    if not os.path.exists(MODEL_PATH):
-        return None
-    try:
-        return tf.keras.models.load_model(MODEL_PATH)
-    except Exception as e:
-        st.error(f"Model load error: {e}")
-        return None
-
-@st.cache_data
-def load_dataset():
-    if not os.path.exists(DATASET_PATH):
-        return None
-    try:
-        return pd.read_csv(DATASET_PATH)
-    except Exception:
-        return None
-
+# Load resources
 model = load_cnn_model()
 dataset = load_dataset()
 
@@ -288,197 +174,215 @@ if model is None:
 if dataset is None:
     st.warning(S["no_dataset"])
 
-# Breed labels
-BREEDS = [
-'Alambadi','Amritmahal','Ayrshire','Banni','Bargur','Bhadawari','Brown_Swiss',
-'Dangi','Deoni','Gir','Guernsey','Hallikar','Hariana','Holstein_Friesian',
-'Jaffrabadi','Jersey','Kangayam','Kankrej','Kasargod','Kenkatha','Kherigarh',
-'Khillari','Krishna_Valley','Malnad_gidda','Mehsana','Murrah','Nagori','Nagpuri',
-'Nili_Ravi','Nimari','Ongole','Pulikulam','Rathi','Red_Sindhi','Sahiwal',
-'Tharparkar','Toda','Umblachery','Vechur'
-]
+# Helper to play and cache audio
+def play_and_cache_audio(text, key):
+    if HAVE_GTTS:
+        spinner_text = translate_text(S.get("generating_audio", "Generating audio..."), TARGET_LANG, enable_translator, HAVE_TRANSLATOR)
+        with st.spinner(spinner_text):
+            audio_bytes = generate_audio_bytes(text, TARGET_LANG)
+            
+        if audio_bytes:
+            st.session_state.audio_cache[key] = audio_bytes
+            st.rerun()
+        else:
+            st.error(S.get('tts_failed','Audio failed:'))
 
-# Preprocess + predict
-def preprocess_pil(img: Image.Image, size=224):
-    if img.mode != "RGB":
-        img = img.convert("RGB")
-    img = img.resize((size, size))
-    arr = np.array(img).astype("float32")
-    arr = preprocess_input(arr)
-    return np.expand_dims(arr, 0)
-
-def predict_breed(img: Image.Image):
-    x = preprocess_pil(img)
-    preds = model.predict(x)
-    probs = preds[0]
-    idx = int(np.argmax(probs))
-    return {"label": BREEDS[idx], "confidence": float(probs[idx])}
-
-# Translation helpers
-LANG_CODE_MAP = {"English":"en","Hindi":"hi","Marathi":"mr","Punjabi":"pa"}
-
-def translate_to_english(text: str) -> str:
-    if not enable_translator or not HAVE_TRANSLATOR:
-        return text
-    try:
-        return GoogleTranslator(source="auto", target="en").translate(text)
-    except Exception:
-        return text
-
-def translate_from_english(text: str, target_lang: str) -> str:
-    if target_lang == "English" or not enable_translator or not HAVE_TRANSLATOR:
-        return text
-    try:
-        code = LANG_CODE_MAP.get(target_lang, "en")
-        return GoogleTranslator(source="en", target=code).translate(text)
-    except Exception:
-        return text
-
-def translate_text(text: str, target_lang: str) -> str:
-    if not enable_translator or not HAVE_TRANSLATOR:
-        return text
-    try:
-        code = LANG_CODE_MAP.get(target_lang, "en")
-        return GoogleTranslator(source="auto", target=code).translate(text)
-    except Exception:
-        return text
-
-# TTS cleaning & playback
-def clean_for_tts(text: str) -> str:
-    if not text:
-        return text
-    text = re.sub(r"<[^>]+>", " ", text)
-    text = re.sub(r"[*_`~#>\-•→←↑↓✔✓➤★☆▶►]", " ", text)
-    text = re.sub(r":[a-zA-Z_]+:", " ", text)
-    text = re.sub(r"[^\w\s\.,]", " ", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
-
-def play_tts(text: str, lang_key: str = TARGET_LANG):
-    if not HAVE_GTTS:
-        return
-    try:
-        clean_text = clean_for_tts(text)
-        lang_code = LANG_CODE_MAP.get(lang_key, "en")
-        try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
-                gTTS(clean_text, lang=lang_code).save(tmp.name)
-            st.audio(tmp.name, format="audio/mp3")
-        except Exception:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
-                gTTS(clean_text, lang="en").save(tmp.name)
-            st.audio(tmp.name, format="audio/mp3")
-    except Exception as e:
-        st.error(f"{S.get('tts_failed','Audio failed:')} {e}")
-
-# Render breed info
-def render_breed_info(info_row: dict):
-    header = translate_text(S.get("breed_information","Breed Information"), TARGET_LANG)
+# Render breed info helper (Modified to accept text)
+def render_breed_info_ui(info_text: str):
+    header = translate_text(S.get("breed_information","Breed Information"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR)
     st.markdown(f"""
     <div style="
-        padding: 18px;
+        padding: 20px;
         border-radius: 12px;
-        background-color: #1e1e1e;
-        border: 1px solid #444;
-        color: white;
+        background-color: #FAFAFA;
+        border: 2px solid #DD5716;
+        color: #1e1e1e;
         line-height: 1.6;
+        margin-bottom: 15px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     ">
-        <h3 style="margin-top:0;">🐄 {header}</h3>
+        <h3 style="margin-top:0; color: #DD5716; display: flex; align-items: center; gap: 10px;">
+            {header}
+        </h3>
+        <div style="white-space: pre-wrap; font-size: 1.05rem;">{info_text}</div>
+    </div>
     """, unsafe_allow_html=True)
-
-    text_lines = []
-    for k, v in info_row.items():
-        if str(v).strip() not in ["nan","None",""]:
-            clean_k = translate_text(k.replace("_"," ").title(), TARGET_LANG)
-            clean_v = translate_text(str(v), TARGET_LANG)
-            st.markdown(f"<p><strong>{clean_k}:</strong> {clean_v}</p>", unsafe_allow_html=True)
-            text_lines.append(f"{clean_k}: {clean_v}")
-    st.markdown("</div>", unsafe_allow_html=True)
+    
+    # On-demand Listen Button (Cached)
+    key = "breed_info_audio"
+    if HAVE_GTTS:
+        if key in st.session_state.audio_cache:
+            st.audio(st.session_state.audio_cache[key], format="audio/mp3")
+        else:
+            if st.button(translate_text(S.get("listen", "🔊 Listen"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR), key=f"btn_{key}"):
+                play_and_cache_audio(info_text, key)
 
 
 # ==============================================================================
 # TAB 1: PREDICT BREED & CONTINUOUS CHAT
 # ==============================================================================
 if nav_choice == S["tab_predict"]:
-    st.subheader(translate_text(S.get("upload_or_capture", S.get("upload","Upload or Capture Image")), TARGET_LANG))
-
-    img_choice = st.radio(translate_text(S.get("select_input","Select input type"), TARGET_LANG),
-                          [translate_text(S["upload"], TARGET_LANG),
-                           translate_text(S["url"], TARGET_LANG),
-                           translate_text(S["webcam"], TARGET_LANG)])
-
+    
     uploaded_image = None
 
-    if img_choice == translate_text(S["upload"], TARGET_LANG):
-        file = st.file_uploader(translate_text(S.get("choose_image","Choose image"), TARGET_LANG), type=["jpg","jpeg","png"])
-        if file:
-            uploaded_image = Image.open(file)
-            st.image(uploaded_image, width=350)
-    elif img_choice == translate_text(S["url"], TARGET_LANG):
-        url = st.text_input(translate_text(S.get("enter_url","Enter image URL"), TARGET_LANG))
-        if url:
-            try:
-                resp = requests.get(url, timeout=10)
-                uploaded_image = Image.open(io.BytesIO(resp.content))
-                st.image(uploaded_image, width=350)
-            except Exception:
-                st.error(translate_text(S.get("invalid_url","Invalid URL"), TARGET_LANG))
-    elif img_choice == translate_text(S["webcam"], TARGET_LANG):
-        cam = st.camera_input(translate_text(S.get("take_photo","Take photo"), TARGET_LANG))
-        if cam:
-            uploaded_image = Image.open(cam)
-            st.image(uploaded_image, width=350)
+    # Check if we have a persisted image
+    if st.session_state.persisted_image is not None:
+        st.image(st.session_state.persisted_image, width=350)
+        uploaded_image = st.session_state.persisted_image
+        
+        if st.button("🔄 " + translate_text("New Prediction", TARGET_LANG, enable_translator, HAVE_TRANSLATOR)):
+            st.session_state.persisted_image = None
+            st.session_state.current_predicted_breed = None
+            st.session_state.chat_history = []
+            st.session_state.current_breed_info = None
+            # Clear audio cache related to this tab? Maybe just breed info
+            if "breed_info_audio" in st.session_state.audio_cache:
+                del st.session_state.audio_cache["breed_info_audio"]
+            # Also clear chat audio keys?
+            keys_to_remove = [k for k in st.session_state.audio_cache.keys() if k.startswith("chat_")]
+            for k in keys_to_remove:
+                del st.session_state.audio_cache[k]
+            
+            st.rerun()
+
+    else:
+        # Informational message (Red Warning)
+        st.error(translate_text(S.get("initial_setup_instructions", "**Important Setup Instructions**\n"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR))
+        info_msg = (
+            "- **Please use your Gemini API key.**\n"
+            "- **Please select the language of Pashudhan AI for before starting conversation.**"
+        )
+        st.info(translate_text(info_msg, TARGET_LANG, enable_translator, HAVE_TRANSLATOR))
+
+        st.subheader(translate_text(S.get("upload_or_capture", S.get("upload","Upload or Capture Image")), TARGET_LANG, enable_translator, HAVE_TRANSLATOR))
+
+        # from streamlit_option_menu import option_menu
+        img_choice = option_menu(
+            menu_title=translate_text(S.get("select_input","Select input type"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR),
+            options=[
+                translate_text(S["upload"], TARGET_LANG, enable_translator, HAVE_TRANSLATOR),
+                translate_text(S["url"], TARGET_LANG, enable_translator, HAVE_TRANSLATOR),
+                translate_text(S["webcam"], TARGET_LANG, enable_translator, HAVE_TRANSLATOR)
+            ],
+            icons=["upload", "link", "camera"],
+            menu_icon="image",
+            default_index=0,
+            orientation="horizontal",
+            styles={
+                "container": {"padding": "0!important", "background-color": "transparent"},
+                "icon": {"color": "#4A4A4A", "font-size": "18px"},
+                "nav-link": {
+                    "font-size": "14px",
+                    "text-align": "center",
+                    "margin": "0px",
+                    "--hover-color": "#e0e0e0",
+                    "border-radius": "8px"
+                },
+                "nav-link-selected": {
+                    "background-color": "#DD5716",
+                    "color": "white",
+                },
+            }
+        )
+
+        if img_choice == translate_text(S["upload"], TARGET_LANG, enable_translator, HAVE_TRANSLATOR):
+            file = st.file_uploader(translate_text(S.get("choose_image","Choose image"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR), type=["jpg","jpeg","png"])
+            if file:
+                uploaded_image = Image.open(file)
+                st.session_state.persisted_image = uploaded_image
+                st.rerun() # Rerun to switch to "persisted" view
+        elif img_choice == translate_text(S["url"], TARGET_LANG, enable_translator, HAVE_TRANSLATOR):
+            url = st.text_input(translate_text(S.get("enter_url","Enter image URL"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR))
+            if url:
+                try:
+                    resp = requests.get(url, timeout=10)
+                    uploaded_image = Image.open(io.BytesIO(resp.content))
+                    st.session_state.persisted_image = uploaded_image
+                    st.rerun()
+                except Exception:
+                    st.error(translate_text(S.get("invalid_url","Invalid URL"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR))
+        elif img_choice == translate_text(S["webcam"], TARGET_LANG, enable_translator, HAVE_TRANSLATOR):
+            cam = st.camera_input(translate_text(S.get("take_photo","Take photo"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR))
+            if cam:
+                uploaded_image = Image.open(cam)
+                st.session_state.persisted_image = uploaded_image
+                st.rerun()
 
     # Logic to run prediction AND manage chat session reset
     if uploaded_image is not None and model is not None:
         try:
-            # Run prediction
-            prediction_result = predict_breed(uploaded_image)
+            # Run prediction (Cached)
+            # 1. Preprocess to get array (fast, no need to cache)
+            input_array = preprocess_pil(uploaded_image)
+            # 2. Run inference (slow, cached based on array content)
+            prediction_result = get_cached_prediction(model, input_array)
             predicted_breed_label = prediction_result.get("label")
             
             # Display Prediction Info
-            st.info(translate_text(f"{S['predicted']}: {predicted_breed_label}", TARGET_LANG))
-            st.write(translate_text(f"{S['confidence']}: {prediction_result.get('confidence')*100:.2f}%", TARGET_LANG))
+            st.info(translate_text(f"{S['predicted']}: {predicted_breed_label}", TARGET_LANG, enable_translator, HAVE_TRANSLATOR))
+            st.write(translate_text(f"{S['confidence']}: {prediction_result.get('confidence')*100:.2f}%", TARGET_LANG, enable_translator, HAVE_TRANSLATOR))
 
             # CHECK: Is this a NEW breed detection? If so, reset chat history
             if st.session_state.current_predicted_breed != predicted_breed_label:
                 st.session_state.current_predicted_breed = predicted_breed_label
                 st.session_state.chat_history = [] # Clear history
+                st.session_state.current_breed_info = None # Clear info
+                # Clear audio cache for new breed
+                if "breed_info_audio" in st.session_state.audio_cache:
+                    del st.session_state.audio_cache["breed_info_audio"]
                 
                 # Fetch info for context
-                context_str = ""
-                if dataset is not None:
-                    breed_row = dataset[dataset["breed"].astype(str).str.lower() == predicted_breed_label.lower()]
-                    if not breed_row.empty:
-                        info_row = breed_row.iloc[0].to_dict()
-                        context_str = "\n".join([f"{k}: {v}" for k, v in info_row.items() if str(v).strip() not in ["nan", "None", ""]])
-                
+                context_str = get_breed_context_string(dataset, predicted_breed_label)
                 st.session_state.current_breed_context = context_str
 
-            # Show Breed Details
-            if dataset is not None:
-                 breed_row = dataset[dataset["breed"].astype(str).str.lower() == predicted_breed_label.lower()]
-                 if not breed_row.empty:
-                     info_row = breed_row.iloc[0].to_dict()
-                     render_breed_info(info_row)
-                 else:
-                     st.warning(translate_text(S["no_dataset_info"], TARGET_LANG))
+                # --- GENERATE GEMINI INFO ---
+                if user_api_key:
+                    with st.spinner(translate_text(S.get("generating_info", "Generating breed information..."), TARGET_LANG, enable_translator, HAVE_TRANSLATOR)):
+                        info_text_raw = generate_breed_info(user_api_key, predicted_breed_label, context_str)
+                    
+                    if info_text_raw:
+                        info_text_display = translate_from_english(info_text_raw, TARGET_LANG, enable_translator, HAVE_TRANSLATOR)
+                        st.session_state.current_breed_info = info_text_display
+                        # Auto-play removed
+                else:
+                    # Fallback if no API key (optional, maybe just show warning)
+                    pass
+
+            # Show Breed Details (Gemini Info or Fallback)
+            if st.session_state.current_breed_info:
+                render_breed_info_ui(st.session_state.current_breed_info)
+            elif not user_api_key:
+                 st.warning(translate_text(S.get("api_key_warning", "Please enter Gemini API Key to see detailed AI-generated breed information."), TARGET_LANG, enable_translator, HAVE_TRANSLATOR))
+                 # Fallback table
+                 info_row = get_breed_info(dataset, predicted_breed_label)
+                 if info_row:
+                     fallback_text = "\n".join([f"{k.replace('_',' ').title()}: {v}" for k, v in info_row.items() if str(v).strip() not in ["nan", "None", ""]])
+                     # Translate fallback text
+                     fallback_text = translate_text(fallback_text, TARGET_LANG, enable_translator, HAVE_TRANSLATOR)
+                     render_breed_info_ui(fallback_text)
 
         except Exception as e:
-            st.error(f"Error during prediction: {e}")
+            st.error(f"{translate_text(S.get('error_prediction', 'Error during prediction:'), TARGET_LANG, enable_translator, HAVE_TRANSLATOR)} {translate_text(str(e), TARGET_LANG, enable_translator, HAVE_TRANSLATOR)}")
 
     # ---------------- CONTINUOUS CHAT FOR PREDICTED BREED ----------------
     if st.session_state.current_predicted_breed:
         st.markdown("---")
-        st.subheader(translate_text(S.get("chat_history", "Chat about this Breed"), TARGET_LANG))
+        st.subheader(translate_text(S.get("chat_history", "Chat about this Breed"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR))
 
         # 1. Display Chat History
-        for message in st.session_state.chat_history:
+        for i, message in enumerate(st.session_state.chat_history):
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
+                if message["role"] == "assistant" and HAVE_GTTS:
+                    key = f"chat_{i}"
+                    if key in st.session_state.audio_cache:
+                        st.audio(st.session_state.audio_cache[key], format="audio/mp3")
+                    else:
+                        if st.button(translate_text(S.get("listen", "🔊 Listen"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR), key=f"btn_{key}"):
+                            play_and_cache_audio(message["content"], key)
 
         # 2. Chat Input
-        placeholder_text = translate_text(S.get("follow_up_placeholder", "Ask follow up..."), TARGET_LANG)
+        placeholder_text = translate_text(S.get("follow_up_placeholder", "Ask follow up..."), TARGET_LANG, enable_translator, HAVE_TRANSLATOR)
         if user_input := st.chat_input(placeholder_text):
             
             # A. Show User Message
@@ -486,81 +390,89 @@ if nav_choice == S["tab_predict"]:
             st.session_state.chat_history.append({"role": "user", "content": user_input})
 
             # B. Generate Response
-            try:
-                if genai:
-                    dataset_context = st.session_state.current_breed_context
-                    breed_name = st.session_state.current_predicted_breed
-                    
-                    q_en = translate_to_english(user_input)
-                    
-                    final_prompt = f"""
-                    You are a veterinary expert. 
-                    The user has uploaded an image of a cattle breed identified as: {breed_name}.
-                    
-                    Here is the official dataset information about this breed:
-                    {dataset_context}
-
-                    User Question: {q_en}
-
-                    Answer the question based on the dataset info and your general knowledge. 
-                    Keep the answer helpful and concise.
-                    """
-
-                    # Use valid model
-                    chat_model = genai.GenerativeModel("gemini-2.5-pro")
-                    response = chat_model.generate_content(final_prompt)
-                    answer_raw = response.text.strip()
-
-                    answer_display = translate_from_english(answer_raw, TARGET_LANG)
+            if user_api_key:
+                dataset_context = st.session_state.current_breed_context
+                breed_name = st.session_state.current_predicted_breed
+                
+                q_en = translate_to_english(user_input, enable_translator, HAVE_TRANSLATOR)
+                
+                with st.spinner(translate_text(S.get("thinking", "PashuDhan AI is thinking..."), TARGET_LANG, enable_translator, HAVE_TRANSLATOR)):
+                    answer_raw = generate_chat_response(user_api_key, breed_name, dataset_context, q_en)
+                
+                if answer_raw:
+                    answer_display = translate_from_english(answer_raw, TARGET_LANG, enable_translator, HAVE_TRANSLATOR)
 
                     # C. Show Assistant Message
                     with st.chat_message("assistant"):
                         st.markdown(answer_display)
                     
                     st.session_state.chat_history.append({"role": "assistant", "content": answer_display})
-
-                    if enable_tts:
-                        play_tts(answer_display, TARGET_LANG)
-                else:
-                    st.error("Gemini API not configured.")
-            except Exception as e:
-                st.error(f"Error generating chat response: {e}")
+                    st.rerun() # Rerun to show the new message in the loop with the button
+            else:
+                st.error(translate_text(S.get("api_key_error", "Please insert your Google Gemini API key in the sidebar to use the chat features."), TARGET_LANG, enable_translator, HAVE_TRANSLATOR))
 
 
 # ==============================================================================
 # TAB 2: ASK PASHU AI (ANY BREED - CONTINUOUS CHAT)
 # ==============================================================================
 elif nav_choice == S["tab_ask"]:
-    st.subheader(translate_text(S.get("ask_question", "Ask a Question about the Cattle"), TARGET_LANG))
+    st.subheader(translate_text(S.get("ask_question", "Ask a Question about the Cattle"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR))
 
     if dataset is not None:
         # 1. Select Breed
         breed_names = dataset["breed"].dropna().unique().tolist()
         breed_names.sort()
-        selected_breed = st.selectbox(translate_text("Select Breed", TARGET_LANG), breed_names, key="manual_select")
+        
+        # Explicit persistence for Tab 2 selection
+        if "manual_selected_index" not in st.session_state:
+            st.session_state.manual_selected_index = 0
+            
+        def on_breed_change():
+            st.session_state.manual_chat_history = [] # Reset history on change
+            # Clear manual chat audio cache
+            keys_to_remove = [k for k in st.session_state.audio_cache.keys() if k.startswith("manual_chat_")]
+            for k in keys_to_remove:
+                del st.session_state.audio_cache[k]
 
-        # Handle Context Switching (Clear history if breed changes)
+        selected_breed = st.selectbox(
+            translate_text(S.get("select_breed", "Select Breed"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR), 
+            breed_names, 
+            index=breed_names.index(st.session_state.manual_current_breed) if st.session_state.manual_current_breed in breed_names else 0,
+            key="manual_select_box"
+        )
+        
+        # Update state if changed (Streamlit handles the widget state, but we sync our var)
         if st.session_state.manual_current_breed != selected_breed:
-            st.session_state.manual_current_breed = selected_breed
-            st.session_state.manual_chat_history = [] # Reset history for new breed
+             st.session_state.manual_current_breed = selected_breed
+             st.session_state.manual_chat_history = []
+             # Clear audio cache
+             keys_to_remove = [k for k in st.session_state.audio_cache.keys() if k.startswith("manual_chat_")]
+             for k in keys_to_remove:
+                del st.session_state.audio_cache[k]
+             st.rerun()
 
         # Calculate Context for this breed
         manual_breed_context = f"Breed: {selected_breed}\n"
-        breed_row = dataset[dataset["breed"].astype(str).str.lower() == selected_breed.lower()]
-        if not breed_row.empty:
-            info_row = breed_row.iloc[0].to_dict()
-            context_text = "\n".join([f"{k.replace('_',' ').title()}: {v}" for k, v in info_row.items() if str(v).strip() not in ["nan", "None", ""]])
+        context_text = get_breed_context_string(dataset, selected_breed)
+        if context_text:
             manual_breed_context += context_text
         else:
-            manual_breed_context = f"No dataset info available for {selected_breed}."
+            manual_breed_context = f"{translate_text(S.get('no_dataset_info', 'No dataset info available for'), TARGET_LANG, enable_translator, HAVE_TRANSLATOR)} {selected_breed}."
         
         # 2. Display Chat History
-        for message in st.session_state.manual_chat_history:
+        for i, message in enumerate(st.session_state.manual_chat_history):
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
+                if message["role"] == "assistant" and HAVE_GTTS:
+                    key = f"manual_chat_{i}"
+                    if key in st.session_state.audio_cache:
+                        st.audio(st.session_state.audio_cache[key], format="audio/mp3")
+                    else:
+                        if st.button(translate_text(S.get("listen", "🔊 Listen"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR), key=f"btn_{key}"):
+                            play_and_cache_audio(message["content"], key)
 
         # 3. Chat Input (Continuous)
-        ph_text = translate_text(S.get("manual_chat_placeholder", "Ask anything about this breed..."), TARGET_LANG)
+        ph_text = translate_text(S.get("manual_chat_placeholder", "Ask anything about this breed..."), TARGET_LANG, enable_translator, HAVE_TRANSLATOR)
         if manual_input := st.chat_input(ph_text):
             
             # A. Display User Message
@@ -568,38 +480,20 @@ elif nav_choice == S["tab_ask"]:
             st.session_state.manual_chat_history.append({"role": "user", "content": manual_input})
 
             # B. Generate Response
-            try:
-                if genai:
-                    q_en = translate_to_english(manual_input)
-                    
-                    # Build Prompt with specific context
-                    prompt = f"""
-                    You are a veterinary AI expert. 
-                    User is asking about the cattle breed: {selected_breed}.
-                    
-                    Official Dataset Info:
-                    {manual_breed_context}
-
-                    User Question: {q_en}
-                    
-                    Answer based on the dataset and general veterinary knowledge.
-                    """
-
-                    chat_model = genai.GenerativeModel("gemini-2.5-pro")
-                    response = chat_model.generate_content(prompt)
-                    answer_raw = response.text.strip()
-                    
-                    answer_display = translate_from_english(answer_raw, TARGET_LANG)
+            if user_api_key:
+                q_en = translate_to_english(manual_input, enable_translator, HAVE_TRANSLATOR)
+                
+                with st.spinner(translate_text(S.get("thinking", "PashuDhan AI is thinking..."), TARGET_LANG, enable_translator, HAVE_TRANSLATOR)):
+                    answer_raw = generate_manual_chat_response(user_api_key, selected_breed, manual_breed_context, q_en)
+                
+                if answer_raw:
+                    answer_display = translate_from_english(answer_raw, TARGET_LANG, enable_translator, HAVE_TRANSLATOR)
 
                     # C. Display Assistant Message
                     with st.chat_message("assistant"):
                         st.markdown(answer_display)
                     
                     st.session_state.manual_chat_history.append({"role": "assistant", "content": answer_display})
-
-                    if enable_tts:
-                        play_tts(answer_display, TARGET_LANG)
-                else:
-                    st.error("Gemini API not configured.")
-            except Exception as e:
-                st.error(f"Error generating response: {e}")
+                    st.rerun()
+            else:
+                st.error(translate_text(S.get("api_key_error", "Please insert your Google Gemini API key in the sidebar to use the chat features."), TARGET_LANG, enable_translator, HAVE_TRANSLATOR))
