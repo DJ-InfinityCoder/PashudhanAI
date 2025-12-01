@@ -136,6 +136,8 @@ cython_debug/
 
 # Model files (optional, depending on size)
 *.h5
+pashu_model.h5
+
 # *.tflite
 
 # IDE settings
