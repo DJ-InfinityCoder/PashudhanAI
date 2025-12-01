@@ -235,6 +235,18 @@ DATASET_PATH = "dataset.csv"
 
 @st.cache_resource
 def load_cnn_model():
+    # Decompress if needed
+    if not os.path.exists(MODEL_PATH) and os.path.exists(MODEL_PATH + ".gz"):
+        import gzip
+        import shutil
+        try:
+            with gzip.open(MODEL_PATH + ".gz", 'rb') as f_in:
+                with open(MODEL_PATH, 'wb') as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+        except Exception as e:
+            st.error(f"Error decompressing model: {e}")
+            return None
+
     if not os.path.exists(MODEL_PATH):
         return None
     try:
