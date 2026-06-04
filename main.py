@@ -18,32 +18,121 @@ load_dotenv()
 
 # Streamlit setup
 st.set_page_config(page_title="🐄 PashuDhan AI", layout="wide")
-st.markdown("""
-<style>
-/* Global Button Style */
-div.stButton > button:first-child {
-    background-color: #DD5716;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    padding: 0.5rem 1rem;
-    font-weight: 600;
-    transition: all 0.3s ease;
-}
-div.stButton > button:first-child:hover {
-    background-color: #b94510;
-    color: white;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-}
-div.stButton > button:first-child:active {
-    background-color: #96380d;
-    color: white;
-}
+# Initialize theme state if not present
+if "dark_mode" not in st.session_state:
+    st.session_state.dark_mode = False
 
-/* Chat Input Style */
-.stChatInputContainer {
-    border-color: #DD5716 !important;
-}
+# Sidebar theme toggle at the top
+theme_label = "Dark Mode 🌙" if st.session_state.dark_mode else "Light Mode ☀️"
+dark_mode_selected = st.sidebar.toggle(theme_label, value=st.session_state.dark_mode, key="theme_toggle")
+if dark_mode_selected != st.session_state.dark_mode:
+    st.session_state.dark_mode = dark_mode_selected
+    st.rerun()
+
+# Theme Variables based on Dark Mode
+if st.session_state.dark_mode:
+    bg_color = "#0B0F19"
+    sidebar_bg = "#111827"
+    text_color = "#E2E8F0"
+    text_muted = "#94A3B8"
+    card_bg = "#161B2B"
+    border_color = "#1E293B"
+    shadow = "0 8px 30px rgba(0, 0, 0, 0.4)"
+    primary_color = "#FF7336"
+    primary_hover = "#EA580C"
+    opt_icon_color = "#94A3B8"
+    opt_hover_color = "#1E293B"
+    input_bg = "#111827"
+    input_border = "#1E293B"
+else:
+    bg_color = "#F8FAFC"
+    sidebar_bg = "#FFFFFF"
+    text_color = "#1E293B"
+    text_muted = "#64748B"
+    card_bg = "#FFFFFF"
+    border_color = "#E2E8F0"
+    shadow = "0 8px 30px rgba(0, 0, 0, 0.05)"
+    primary_color = "#DD5716"
+    primary_hover = "#C2410C"
+    opt_icon_color = "#475569"
+    opt_hover_color = "#F1F5F9"
+    input_bg = "#FFFFFF"
+    input_border = "#E2E8F0"
+
+# Inject Global Styling & Typography overrides
+st.markdown(f"""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+
+html, body, [class*="css"], [class*="st-"] {{
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+}}
+
+/* App Container */
+.stApp {{
+    background-color: {bg_color} !important;
+    color: {text_color} !important;
+}}
+
+/* Sidebar Container */
+section[data-testid="stSidebar"] {{
+    background-color: {sidebar_bg} !important;
+    border-right: 1px solid {border_color} !important;
+}}
+
+/* Custom primary buttons styling */
+div.stButton > button:first-child {{
+    background-color: {primary_color} !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 10px !important;
+    padding: 0.6rem 1.2rem !important;
+    font-weight: 600 !important;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}}
+div.stButton > button:first-child:hover {{
+    background-color: {primary_hover} !important;
+    box-shadow: 0 6px 12px rgba(0,0,0,0.1) !important;
+    transform: translateY(-1px) !important;
+    color: white !important;
+}}
+div.stButton > button:first-child:active {{
+    transform: translateY(1px) !important;
+}}
+
+/* Chat Input Styling */
+.stChatInputContainer {{
+    border-color: {primary_color} !important;
+    background-color: {input_bg} !important;
+}}
+
+/* File uploader area */
+div[data-testid="stFileUploader"] {{
+    background-color: {card_bg} !important;
+    border: 2px dashed {border_color} !important;
+    border-radius: 12px !important;
+    padding: 1rem !important;
+}}
+
+/* Chat bubbles customization */
+div[data-testid="chatAvatarIcon-user"] {{
+    background-color: {primary_color} !important;
+}}
+div[data-testid="stChatMessage"] {{
+    background-color: {card_bg} !important;
+    border: 1px solid {border_color} !important;
+    border-radius: 12px !important;
+    margin-bottom: 0.8rem !important;
+    padding: 1rem !important;
+    box-shadow: {shadow} !important;
+}}
+
+/* Standard headers styling */
+h1, h2, h3, h4, h5, h6 {{
+    color: {text_color} !important;
+    font-weight: 700 !important;
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -119,18 +208,19 @@ with st.sidebar:
         default_index=st.session_state.active_tab_index,
         styles={
             "container": {"padding": "0!important", "background-color": "transparent"},
-            "icon": {"color": "#4A4A4A", "font-size": "20px"},   # Normal icon color
+            "icon": {"color": opt_icon_color, "font-size": "20px"},
             "nav-link": {
                 "font-size": "16px",
                 "text-align": "left",
                 "margin": "0px 0px 10px 0px",
-                "--hover-color": "#D1D1D1"
+                "--hover-color": opt_hover_color,
+                "color": text_color
             },
             "icon-selected": {
                 "color": "#FFFFFF"
             },
             "nav-link-selected": {
-                "background-color": "#DD5716",
+                "background-color": primary_color,
                 "color": "#FFFFFF",                 
             },
         }
@@ -192,19 +282,20 @@ def render_breed_info_ui(info_text: str):
     header = translate_text(S.get("breed_information","Breed Information"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR)
     st.markdown(f"""
     <div style="
-        padding: 20px;
-        border-radius: 12px;
-        background-color: #FAFAFA;
-        border: 2px solid #DD5716;
-        color: #1e1e1e;
-        line-height: 1.6;
-        margin-bottom: 15px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        padding: 24px;
+        border-radius: 16px;
+        background-color: {card_bg};
+        border: 1px solid {border_color};
+        color: {text_color};
+        line-height: 1.7;
+        margin-bottom: 20px;
+        box-shadow: {shadow};
+        transition: transform 0.2s ease-in-out;
     ">
-        <h3 style="margin-top:0; color: #DD5716; display: flex; align-items: center; gap: 10px;">
-            {header}
+        <h3 style="margin-top:0; color: {primary_color}; display: flex; align-items: center; gap: 10px; font-weight: 700;">
+            🐄 {header}
         </h3>
-        <div style="white-space: pre-wrap; font-size: 1.05rem;">{info_text}</div>
+        <div style="white-space: pre-wrap; font-size: 1.05rem; opacity: 0.95;">{info_text}</div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -270,16 +361,17 @@ if nav_choice == S["tab_predict"]:
             orientation="horizontal",
             styles={
                 "container": {"padding": "0!important", "background-color": "transparent"},
-                "icon": {"color": "#4A4A4A", "font-size": "18px"},
+                "icon": {"color": opt_icon_color, "font-size": "18px"},
                 "nav-link": {
                     "font-size": "14px",
                     "text-align": "center",
                     "margin": "0px",
-                    "--hover-color": "#e0e0e0",
-                    "border-radius": "8px"
+                    "--hover-color": opt_hover_color,
+                    "border-radius": "8px",
+                    "color": text_color
                 },
                 "nav-link-selected": {
-                    "background-color": "#DD5716",
+                    "background-color": primary_color,
                     "color": "white",
                 },
             }
