@@ -22,12 +22,11 @@ st.set_page_config(page_title="🐄 PashuDhan AI", layout="wide")
 if "dark_mode" not in st.session_state:
     st.session_state.dark_mode = False
 
-# Sidebar theme toggle at the top
-theme_label = "Dark Mode 🌙" if st.session_state.dark_mode else "Light Mode ☀️"
-dark_mode_selected = st.sidebar.toggle(theme_label, value=st.session_state.dark_mode, key="theme_toggle")
-if dark_mode_selected != st.session_state.dark_mode:
-    st.session_state.dark_mode = dark_mode_selected
-    st.rerun()
+if "theme_toggle" not in st.session_state:
+    st.session_state.theme_toggle = st.session_state.dark_mode
+
+def on_theme_change():
+    st.session_state.dark_mode = st.session_state.theme_toggle
 
 # Theme Variables based on Dark Mode
 if st.session_state.dark_mode:
@@ -59,6 +58,26 @@ else:
     input_bg = "#FFFFFF"
     input_border = "#E2E8F0"
 
+# Render sidebar brand title at the very top
+st.sidebar.markdown(f"""
+<div style="
+    font-size: 1.35rem; 
+    font-weight: 800; 
+    margin-top: -10px;
+    margin-bottom: 12px; 
+    color: {text_color};
+    display: flex;
+    align-items: center;
+    gap: 8px;
+">
+    🐄 PashuDhan AI
+</div>
+""", unsafe_allow_html=True)
+
+# Sidebar theme toggle right under the header
+theme_label = "Dark Mode" if st.session_state.dark_mode else "Light Mode"
+st.sidebar.toggle(theme_label, key="theme_toggle", on_change=on_theme_change)
+
 # Inject Global Styling & Typography overrides
 st.markdown(f"""
 <style>
@@ -68,16 +87,223 @@ html, body, [class*="css"], [class*="st-"] {{
     font-family: 'Plus Jakarta Sans', sans-serif !important;
 }}
 
-/* App Container */
-.stApp {{
+/* Main container spacing & sizing */
+.block-container {{
+    padding-top: 1.5rem !important;
+    padding-bottom: 2rem !important;
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+    max-width: 1200px !important;
+}}
+
+/* Typography Scaling */
+h1 {{
+    font-size: 1.45rem !important;
+    margin-bottom: 0.5rem !important;
+    color: {text_color} !important;
+}}
+h2 {{
+    font-size: 1.15rem !important;
+    margin-top: 0.8rem !important;
+    margin-bottom: 0.4rem !important;
+    color: {text_color} !important;
+}}
+h3 {{
+    font-size: 0.95rem !important;
+    margin-top: 0.6rem !important;
+    margin-bottom: 0.3rem !important;
+    color: {text_color} !important;
+}}
+p, span, label, li {{
+    font-size: 0.85rem !important;
+    line-height: 1.45 !important;
+    color: {text_color} !important;
+}}
+small {{
+    color: {text_muted} !important;
+    font-size: 0.75rem !important;
+}}
+
+/* Sidebar Specific Scaling */
+section[data-testid="stSidebar"] h1 {{
+    font-size: 1.1rem !important;
+}}
+section[data-testid="stSidebar"] h2 {{
+    font-size: 0.95rem !important;
+}}
+section[data-testid="stSidebar"] h3 {{
+    font-size: 0.88rem !important;
+}}
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] span,
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] li {{
+    font-size: 0.8rem !important;
+}}
+
+/* Reduce vertical gaps between sidebar widgets */
+section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div {{
+    padding-bottom: 0.35rem !important;
+    padding-top: 0px !important;
+}}
+
+/* App Container and Main Page views */
+.stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {{
     background-color: {bg_color} !important;
     color: {text_color} !important;
 }}
 
-/* Sidebar Container */
+/* Sidebar Container - Restrict width styling only when it is expanded */
+section[data-testid="stSidebar"][aria-expanded="true"] {{
+    background-color: {sidebar_bg} !important;
+    border-right: 1px solid {border_color} !important;
+    min-width: 340px !important;
+    max-width: 340px !important;
+}}
 section[data-testid="stSidebar"] {{
     background-color: {sidebar_bg} !important;
     border-right: 1px solid {border_color} !important;
+}}
+
+/* Replace collapse button material text with unicode arrow symbol to prevent "keyboard" text leak */
+[data-testid="stSidebarCollapseButton"] button span,
+[data-testid="collapsedControl"] button span {{
+    display: none !important;
+}}
+[data-testid="stSidebarCollapseButton"] button,
+[data-testid="collapsedControl"] button {{
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 32px !important;
+    height: 32px !important;
+    background-color: transparent !important;
+    border: none !important;
+}}
+[data-testid="stSidebarCollapseButton"] button::before,
+[data-testid="collapsedControl"] button::before {{
+    content: "▶" !important;
+    display: inline-block !important;
+    font-size: 1.1rem !important;
+    color: {text_color} !important;
+    font-weight: bold !important;
+    visibility: visible !important;
+}}
+section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] button::before {{
+    content: "◀" !important;
+    display: inline-block !important;
+    font-size: 1.1rem !important;
+    color: {text_color} !important;
+    font-weight: bold !important;
+    visibility: visible !important;
+}}
+
+/* Ensure dropdown selectbox and input fields have clear borders and correct padding */
+div[data-baseweb="select"] > div,
+div[data-testid="stTextInput"] div[data-baseweb="input"] {{
+    border: 1px solid {input_border} !important;
+    border-radius: 8px !important;
+    background-color: {input_bg} !important;
+    height: 38px !important;
+}}
+
+/* Force input background and text color directly */
+div[data-testid="stTextInput"] div[data-baseweb="input"] > div,
+div[data-testid="stTextInput"] input {{
+    background-color: {input_bg} !important;
+    color: {text_color} !important;
+}}
+div[data-testid="stTextInput"] button,
+div[data-testid="stTextInput"] button[title="Show password text"],
+div[data-testid="stTextInput"] button[title="Hide password text"] {{
+    background-color: transparent !important;
+    background: transparent !important;
+    border: none !important;
+    color: {text_color} !important;
+}}
+div[data-testid="stTextInput"] button:hover,
+div[data-testid="stTextInput"] button[title="Show password text"]:hover,
+div[data-testid="stTextInput"] button[title="Hide password text"]:hover {{
+    background-color: rgba(255, 255, 255, 0.1) !important;
+}}
+div[data-testid="stTextInput"] button svg,
+div[data-testid="stTextInput"] button[title="Show password text"] svg,
+div[data-testid="stTextInput"] button[title="Hide password text"] svg {{
+    fill: {text_color} !important;
+    color: {text_color} !important;
+}}
+
+/* Ensure the dropdown selection text has high contrast */
+div[data-baseweb="select"] div,
+div[data-baseweb="select"] span,
+div[data-baseweb="select"] p,
+div[data-baseweb="select"] input {{
+    color: {text_color} !important;
+    font-size: 0.85rem !important;
+}}
+
+/* Dropdown list popover colors */
+div[data-baseweb="menu"],
+div[role="listbox"],
+ul[data-testid="stSelectboxVirtualDropdown"] {{
+    background-color: {card_bg} !important;
+    border: 1px solid {border_color} !important;
+}}
+div[data-baseweb="menu"] li,
+div[role="listbox"] li,
+ul[data-testid="stSelectboxVirtualDropdown"] li[role="option"] {{
+    background-color: {card_bg} !important;
+    color: {text_color} !important;
+}}
+div[data-baseweb="menu"] li:hover,
+div[role="listbox"] li:hover,
+ul[data-testid="stSelectboxVirtualDropdown"] li[role="option"]:hover {{
+    background-color: {primary_color} !important;
+    color: white !important;
+}}
+
+/* Override focus and hover borders of input elements */
+div[data-baseweb="select"]:hover > div,
+div[data-testid="stTextInput"] div[data-baseweb="input"]:hover,
+div[data-baseweb="select"]:focus-within > div,
+div[data-testid="stTextInput"] div[data-baseweb="input"]:focus-within {{
+    border-color: {primary_color} !important;
+}}
+
+/* Option Menu styling overrides */
+.container-fluid,
+.container,
+.row,
+.navbar,
+.nav,
+.nav-item,
+.nav-link,
+[role="navigation"],
+div[role="navigation"] div,
+div[role="navigation"] ul,
+div[role="navigation"] li,
+div[role="navigation"] a {{
+    background-color: transparent !important;
+    border: none !important;
+}}
+iframe[title="streamlit_option_menu.option_menu"] {{
+    border: none !important;
+    background: transparent !important;
+    background-color: transparent !important;
+}}
+.nav-link {{
+    color: {text_color} !important;
+    font-size: 0.85rem !important;
+    padding: 6px 10px !important;
+    margin-bottom: 4px !important;
+    border-radius: 6px !important;
+}}
+.nav-link.active,
+.active,
+div[role="navigation"] a.active,
+div[role="navigation"] li.active {{
+    background-color: {primary_color} !important;
+    color: white !important;
 }}
 
 /* Custom primary buttons styling */
@@ -85,15 +311,16 @@ div.stButton > button:first-child {{
     background-color: {primary_color} !important;
     color: white !important;
     border: none !important;
-    border-radius: 10px !important;
-    padding: 0.6rem 1.2rem !important;
+    border-radius: 8px !important;
+    padding: 0.45rem 1rem !important;
+    font-size: 0.9rem !important;
     font-weight: 600 !important;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
+    transition: all 0.2s ease-in-out !important;
 }}
 div.stButton > button:first-child:hover {{
     background-color: {primary_hover} !important;
-    box-shadow: 0 6px 12px rgba(0,0,0,0.1) !important;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
     transform: translateY(-1px) !important;
     color: white !important;
 }}
@@ -102,6 +329,14 @@ div.stButton > button:first-child:active {{
 }}
 
 /* Chat Input Styling */
+[data-testid="stBottom"],
+[data-testid="stBottom"] > div,
+[data-testid="stChatInput"] {{
+    background-color: {bg_color} !important;
+    background: {bg_color} !important;
+    border-top: none !important;
+    box-shadow: none !important;
+}}
 .stChatInputContainer {{
     border-color: {primary_color} !important;
     background-color: {input_bg} !important;
@@ -110,9 +345,29 @@ div.stButton > button:first-child:active {{
 /* File uploader area */
 div[data-testid="stFileUploader"] {{
     background-color: {card_bg} !important;
-    border: 2px dashed {border_color} !important;
+    border: 1.5px dashed {border_color} !important;
     border-radius: 12px !important;
-    padding: 1rem !important;
+    padding: 0.75rem !important;
+}}
+div[data-testid="stFileUploader"] div,
+div[data-testid="stFileUploader"] section,
+div[data-testid="stFileUploader"] button {{
+    background-color: {card_bg} !important;
+    color: {text_color} !important;
+}}
+
+/* Streamlit Notifications / Alert Box Overrides (st.info, st.error, st.warning) */
+div[data-testid="stNotification"] {{
+    background-color: {card_bg} !important;
+    border: 1px solid {border_color} !important;
+    border-radius: 10px !important;
+    padding: 0.6rem 0.9rem !important;
+    box-shadow: {shadow} !important;
+}}
+div[data-testid="stNotification"] p {{
+    font-size: 0.88rem !important;
+    margin: 0 !important;
+    line-height: 1.4 !important;
 }}
 
 /* Chat bubbles customization */
@@ -123,15 +378,9 @@ div[data-testid="stChatMessage"] {{
     background-color: {card_bg} !important;
     border: 1px solid {border_color} !important;
     border-radius: 12px !important;
-    margin-bottom: 0.8rem !important;
-    padding: 1rem !important;
+    margin-bottom: 0.6rem !important;
+    padding: 0.75rem 1rem !important;
     box-shadow: {shadow} !important;
-}}
-
-/* Standard headers styling */
-h1, h2, h3, h4, h5, h6 {{
-    color: {text_color} !important;
-    font-weight: 700 !important;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -162,7 +411,21 @@ user_api_key = st.sidebar.text_input(translate_text(S.get("api_key_label", "Gemi
 if user_api_key:
     configure_gemini(user_api_key)
 else:
-    st.sidebar.warning(translate_text(S.get("api_key_warning", "⚠️ Please enter your Google Gemini API key to use chat features."), TARGET_LANG, enable_translator, HAVE_TRANSLATOR))
+    warning_text = translate_text(S.get("api_key_warning", "Please enter your Google Gemini API key to use chat features."), TARGET_LANG, enable_translator, HAVE_TRANSLATOR)
+    st.sidebar.markdown(f"""
+    <div style="
+        padding: 10px 14px;
+        border-radius: 8px;
+        background-color: {card_bg};
+        border: 1px solid {border_color};
+        color: #EAB308;
+        font-size: 0.82rem;
+        margin-bottom: 12px;
+        line-height: 1.4;
+    ">
+        {warning_text}
+    </div>
+    """, unsafe_allow_html=True)
 
 
 # Initialize last_lang if not present
@@ -200,21 +463,42 @@ with st.sidebar:
 
     nav_options = [S["tab_predict"], S["tab_ask"]]
 
+    # Clean markdown header instead of option menu default title frame
+    st.markdown(f"""
+    <div style="
+        font-size: 0.95rem; 
+        font-weight: 700; 
+        margin-top: 15px; 
+        margin-bottom: 8px; 
+        color: {text_color};
+        opacity: 0.8;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    ">
+        {S.get("nav_title", "Navigation")}
+    </div>
+    """, unsafe_allow_html=True)
+
     nav_choice = option_menu(
-        menu_title=S.get("nav_title", "Navigation"),
+        menu_title=None,
         options=nav_options,
         icons=[S.get("icon_predict", "camera-fill"), S.get("icon_ask", "chat-dots-fill")],
-        menu_icon="cast",
         default_index=st.session_state.active_tab_index,
         styles={
-            "container": {"padding": "0!important", "background-color": "transparent"},
-            "icon": {"color": opt_icon_color, "font-size": "20px"},
+            "container": {"padding": "0!important", "background-color": sidebar_bg, "border": "none!important", "box-shadow": "none!important"},
+            "nav": {"background-color": sidebar_bg, "border": "none!important", "box-shadow": "none!important"},
+            "nav-item": {"background-color": sidebar_bg, "border": "none!important", "box-shadow": "none!important"},
+            "icon": {"color": opt_icon_color, "font-size": "15px"},
             "nav-link": {
-                "font-size": "16px",
+                "font-size": "0.82rem",
                 "text-align": "left",
-                "margin": "0px 0px 10px 0px",
+                "margin": "0px 0px 4px 0px",
+                "padding": "6px 10px",
                 "--hover-color": opt_hover_color,
-                "color": text_color
+                "color": text_color,
+                "border-radius": "6px",
+                "background-color": sidebar_bg
             },
             "icon-selected": {
                 "color": "#FFFFFF"
@@ -305,7 +589,7 @@ def render_breed_info_ui(info_text: str):
         if key in st.session_state.audio_cache:
             st.audio(st.session_state.audio_cache[key], format="audio/mp3")
         else:
-            if st.button(translate_text(S.get("listen", "🔊 Listen"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR), key=f"btn_{key}"):
+            if st.button(translate_text(S.get("listen", "Listen"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR), key=f"btn_{key}"):
                 play_and_cache_audio(info_text, key)
 
 
@@ -321,7 +605,7 @@ if nav_choice == S["tab_predict"]:
         st.image(st.session_state.persisted_image, width=350)
         uploaded_image = st.session_state.persisted_image
         
-        if st.button("🔄 " + translate_text("New Prediction", TARGET_LANG, enable_translator, HAVE_TRANSLATOR)):
+        if st.button(translate_text("New Prediction", TARGET_LANG, enable_translator, HAVE_TRANSLATOR)):
             st.session_state.persisted_image = None
             st.session_state.current_predicted_breed = None
             st.session_state.chat_history = []
@@ -348,27 +632,43 @@ if nav_choice == S["tab_predict"]:
         st.subheader(translate_text(S.get("upload_or_capture", S.get("upload","Upload or Capture Image")), TARGET_LANG, enable_translator, HAVE_TRANSLATOR))
 
         # from streamlit_option_menu import option_menu
+        # Clean header for input type selection
+        st.markdown(f"""
+        <div style="
+            font-size: 0.92rem; 
+            font-weight: 700; 
+            margin-top: 12px; 
+            margin-bottom: 8px; 
+            color: {text_color};
+            opacity: 0.8;
+        ">
+            {translate_text(S.get("select_input","Select input type"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR)}
+        </div>
+        """, unsafe_allow_html=True)
+
         img_choice = option_menu(
-            menu_title=translate_text(S.get("select_input","Select input type"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR),
+            menu_title=None,
             options=[
                 translate_text(S["upload"], TARGET_LANG, enable_translator, HAVE_TRANSLATOR),
                 translate_text(S["url"], TARGET_LANG, enable_translator, HAVE_TRANSLATOR),
                 translate_text(S["webcam"], TARGET_LANG, enable_translator, HAVE_TRANSLATOR)
             ],
             icons=["upload", "link", "camera"],
-            menu_icon="image",
             default_index=0,
             orientation="horizontal",
             styles={
-                "container": {"padding": "0!important", "background-color": "transparent"},
-                "icon": {"color": opt_icon_color, "font-size": "18px"},
+                "container": {"padding": "0!important", "background-color": bg_color, "border": "none!important", "box-shadow": "none!important"},
+                "nav": {"background-color": bg_color, "border": "none!important", "box-shadow": "none!important"},
+                "nav-item": {"background-color": bg_color, "border": "none!important", "box-shadow": "none!important"},
+                "icon": {"color": opt_icon_color, "font-size": "15px"},
                 "nav-link": {
-                    "font-size": "14px",
+                    "font-size": "0.85rem",
                     "text-align": "center",
-                    "margin": "0px",
+                    "margin": "0px 4px 0px 4px",
                     "--hover-color": opt_hover_color,
-                    "border-radius": "8px",
-                    "color": text_color
+                    "border-radius": "6px",
+                    "color": text_color,
+                    "background-color": bg_color
                 },
                 "nav-link-selected": {
                     "background-color": primary_color,
@@ -470,7 +770,7 @@ if nav_choice == S["tab_predict"]:
                     if key in st.session_state.audio_cache:
                         st.audio(st.session_state.audio_cache[key], format="audio/mp3")
                     else:
-                        if st.button(translate_text(S.get("listen", "🔊 Listen"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR), key=f"btn_{key}"):
+                        if st.button(translate_text(S.get("listen", "Listen"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR), key=f"btn_{key}"):
                             play_and_cache_audio(message["content"], key)
 
         # 2. Chat Input
@@ -560,7 +860,7 @@ elif nav_choice == S["tab_ask"]:
                     if key in st.session_state.audio_cache:
                         st.audio(st.session_state.audio_cache[key], format="audio/mp3")
                     else:
-                        if st.button(translate_text(S.get("listen", "🔊 Listen"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR), key=f"btn_{key}"):
+                        if st.button(translate_text(S.get("listen", "Listen"), TARGET_LANG, enable_translator, HAVE_TRANSLATOR), key=f"btn_{key}"):
                             play_and_cache_audio(message["content"], key)
 
         # 3. Chat Input (Continuous)

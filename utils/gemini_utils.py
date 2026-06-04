@@ -1,13 +1,14 @@
 import streamlit as st
 try:
-    import google.generativeai as genai
+    from google import genai
 except Exception:
     genai = None
 
 def configure_gemini(api_key):
-    if genai and api_key:
+    if api_key:
         try:
-            genai.configure(api_key=api_key)
+            # Instantiate client to test configuration correctness
+            client = genai.Client(api_key=api_key)
             return True
         except Exception as e:
             st.sidebar.error(f"Error configuring API key: {e}")
@@ -32,8 +33,11 @@ def generate_breed_info(api_key, breed_label, context_str):
         Do not use markdown tables.
         """
         
-        model = genai.GenerativeModel("gemini-2.5-pro")
-        response = model.generate_content(prompt)
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model="gemini-3.5-flash",
+            contents=prompt
+        )
         return response.text.strip()
     except Exception as e:
         st.error(f"Error generating breed info: {e}")
@@ -61,9 +65,12 @@ def generate_breed_summary(api_key, breed_label, context_str):
         Keep it concise and suitable for audio playback.
         """
         
-        model_summary = genai.GenerativeModel("gemini-2.5-pro")
-        response_summary = model_summary.generate_content(summary_prompt)
-        return response_summary.text.strip()
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model="gemini-3.5-flash",
+            contents=summary_prompt
+        )
+        return response.text.strip()
     except Exception as e:
         st.error(f"Error generating summary: {e}")
         return None
@@ -86,8 +93,11 @@ def generate_chat_response(api_key, breed_name, context_str, user_question):
         Keep the answer helpful and concise.
         """
 
-        chat_model = genai.GenerativeModel("gemini-2.5-pro")
-        response = chat_model.generate_content(final_prompt)
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model="gemini-3.5-flash",
+            contents=final_prompt
+        )
         return response.text.strip()
     except Exception as e:
         st.error(f"Error generating chat response: {e}")
@@ -110,8 +120,11 @@ def generate_manual_chat_response(api_key, selected_breed, manual_breed_context,
         Answer based on the dataset and general veterinary knowledge.
         """
 
-        chat_model = genai.GenerativeModel("gemini-2.5-pro")
-        response = chat_model.generate_content(prompt)
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model="gemini-3.5-flash",
+            contents=prompt
+        )
         return response.text.strip()
     except Exception as e:
         st.error(f"Error generating response: {e}")
